@@ -22,6 +22,7 @@
 
 - (instancetype)initWithVideoDevice:(AVCaptureDevice *)device;
 - (instancetype)initWithVideo:(BOOL)allowVideo;
+- (instancetype)initReceiveOnly;
 
 - (void)addPeerConnectionForID:(NSString *)identifier;
 - (void)removePeerConnectionForID:(NSString *)identifier;
@@ -36,6 +37,7 @@
 // The WebRTC stream captured locally that will be sent to peers, useful for displaying a preview of the local camera
 // in an RTCVideoRenderer and muting or blacking out th stream sent to peers
 @property (readonly, nonatomic) RTCMediaStream *localMediaStream;
+@property (nonatomic, assign) BOOL receiveOnly;
 
 @end
 
@@ -51,3 +53,4 @@
 - (void)webRTC:(TLKWebRTC *)webRTC removedStream:(RTCMediaStream *)stream forPeerWithID:(NSString *)peerID;
 
 @end
+
