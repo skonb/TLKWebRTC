@@ -21,8 +21,8 @@
 #import "RTCVideoTrack.h"
 
 @interface TLKWebRTC () <
-    RTCSessionDescriptionDelegate,
-    RTCPeerConnectionDelegate>
+RTCSessionDescriptionDelegate,
+RTCPeerConnectionDelegate>
 
 @property (readwrite, nonatomic) RTCMediaStream *localMediaStream;
 
@@ -47,29 +47,36 @@ static NSString * const TLKWebRTCSTUNHostname = @"stun:stun.l.google.com:19302";
 #pragma mark - object lifecycle
 
 - (instancetype)initWithVideoDevice:(AVCaptureDevice *)device {
-	self = [super init];
-	if (self) {
-		if (device) {
-			_allowVideo = YES;
-			_videoDevice = device;
-		}
-		[self _commonSetup];
-	}
-	return self;
+    self = [super init];
+    if (self) {
+        if (device) {
+            _allowVideo = YES;
+            _videoDevice = device;
+        }
+        [self _commonSetup];
+    }
+    return self;
 }
 
 - (instancetype)initWithVideo:(BOOL)allowVideo {
-	// Set front camera as the default device
-	AVCaptureDevice* frontCamera;
-	if (allowVideo) {
-		frontCamera = [[AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo] lastObject];
-	}
-	return [self initWithVideoDevice:frontCamera];
+    // Set front camera as the default device
+    AVCaptureDevice* frontCamera;
+    if (allowVideo) {
+        frontCamera = [[AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo] lastObject];
+    }
+    return [self initWithVideoDevice:frontCamera];
+}
+
+- (instancetype)initReceiveOnly{
+    self = [super init];
+    self.receiveOnly = YES;
+    [self _commonSetup];
+    return self;
 }
 
 - (instancetype)init {
-	// Use default device
-	return [self initWithVideo:YES];
+    // Use default device
+    return [self initWithVideo:YES];
 }
 
 - (void)_commonSetup {
@@ -77,22 +84,24 @@ static NSString * const TLKWebRTCSTUNHostname = @"stun:stun.l.google.com:19302";
     _peerConnections = [NSMutableDictionary dictionary];
     _peerToRoleMap = [NSMutableDictionary dictionary];
     _peerToICEMap = [NSMutableDictionary dictionary];
-
+    
     self.iceServers = [NSMutableArray new];
     RTCICEServer *defaultStunServer = [[RTCICEServer alloc] initWithURI:[NSURL URLWithString:TLKWebRTCSTUNHostname] username:@"" password:@""];
     [self.iceServers addObject:defaultStunServer];
-
+    
     [RTCPeerConnectionFactory initializeSSL];
-
-    [self _createLocalStream];
+    
+    if(!self.receiveOnly){
+        [self _createLocalStream];
+    }
 }
 
 - (void)_createLocalStream {
     self.localMediaStream = [self.peerFactory mediaStreamWithLabel:[[NSUUID UUID] UUIDString]];
-
+    
     RTCAudioTrack *audioTrack = [self.peerFactory audioTrackWithID:[[NSUUID UUID] UUIDString]];
     [self.localMediaStream addAudioTrack:audioTrack];
-
+    
     if (self.allowVideo) {
         RTCAVFoundationVideoSource *videoSource = [[RTCAVFoundationVideoSource alloc] initWithFactory:self.peerFactory constraints:nil];
         videoSource.useBackCamera = NO;
@@ -106,7 +115,7 @@ static NSString * const TLKWebRTCSTUNHostname = @"stun:stun.l.google.com:19302";
     RTCPair *videoConstraint = [[RTCPair alloc] initWithKey:@"OfferToReceiveVideo" value:self.allowVideo ? @"true" : @"false"];
     RTCPair *sctpConstraint = [[RTCPair alloc] initWithKey:@"internalSctpDataChannels" value:@"true"];
     RTCPair *dtlsConstraint = [[RTCPair alloc] initWithKey:@"DtlsSrtpKeyAgreement" value:@"true"];
-
+    
     return [[RTCMediaConstraints alloc] initWithMandatoryConstraints:@[audioConstraint, videoConstraint] optionalConstraints:@[sctpConstraint, dtlsConstraint]];
 }
 
@@ -181,7 +190,7 @@ static NSString * const TLKWebRTCSTUNHostname = @"stun:stun.l.google.com:19302";
 
 - (void)peerConnection:(RTCPeerConnection *)peerConnection didCreateSessionDescription:(RTCSessionDescription *)sdp error:(NSError *)error {
     dispatch_async(dispatch_get_main_queue(), ^{
-        RTCSessionDescription* sessionDescription = [[RTCSessionDescription alloc] initWithType:sdp.type sdp:sdp.description];        
+        RTCSessionDescription* sessionDescription = [[RTCSessionDescription alloc] initWithType:sdp.type sdp:sdp.description];
         [peerConnection setLocalDescriptionWithDelegate:self sessionDescription:sessionDescription];
     });
 }
@@ -198,7 +207,7 @@ static NSString * const TLKWebRTCSTUNHostname = @"stun:stun.l.google.com:19302";
                 [self.peerToICEMap removeObjectForKey:keys[0]];
             }
         }
-
+        
         if (peerConnection.signalingState == RTCSignalingHaveLocalOffer) {
             NSArray *keys = [self.peerConnections allKeysForObject:peerConnection];
             if ([keys count] > 0) {
@@ -239,7 +248,7 @@ static NSString * const TLKWebRTCSTUNHostname = @"stun:stun.l.google.com:19302";
             signalingStateString = @"Other state";
             break;
     }
-
+    
     return signalingStateString;
 }
 
@@ -299,8 +308,8 @@ static NSString * const TLKWebRTCSTUNHostname = @"stun:stun.l.google.com:19302";
 // so all are bridged across to the main thread
 
 - (void)peerConnectionOnError:(RTCPeerConnection *)peerConnection {
-//    dispatch_async(dispatch_get_main_queue(), ^{
-//    });
+    //    dispatch_async(dispatch_get_main_queue(), ^{
+    //    });
 }
 
 - (void)peerConnection:(RTCPeerConnection *)peerConnection signalingStateChanged:(RTCSignalingState)stateChanged {
@@ -343,7 +352,7 @@ static NSString * const TLKWebRTCSTUNHostname = @"stun:stun.l.google.com:19302";
 
 - (void)peerConnection:(RTCPeerConnection *)peerConnection gotICECandidate:(RTCICECandidate *)candidate {
     dispatch_async(dispatch_get_main_queue(), ^{
-
+        
         NSArray* keys = [self.peerConnections allKeysForObject:peerConnection];
         if ([keys count] > 0) {
             [self.delegate webRTC:self didSendICECandidate:candidate forPeerWithID:keys[0]];
@@ -358,3 +367,4 @@ static NSString * const TLKWebRTCSTUNHostname = @"stun:stun.l.google.com:19302";
 }
 
 @end
+
